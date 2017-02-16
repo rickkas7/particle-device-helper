@@ -12,7 +12,7 @@ For example:
 - It can find the serial port (/dev/cu.usbmodemFD3161) given a device ID (if the device is running system firmware 0.6.0 or later) without changing the device state.
 - It can find out if the device is currently in serial or DFU mode.
 - It can switch the device into DFU mode
-- It can switch the device into listening mode
+- It can switch the device into and out of listening mode
 
 ## Installation
 

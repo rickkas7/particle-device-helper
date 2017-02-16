@@ -18,7 +18,7 @@ var argv = require('yargs')
 	.demandCommand(1)
 	.argv;
 
-var execFile = require('child_process').execFile;
+var child_process = require('child_process');
 
 var util = require('util');
 
@@ -27,13 +27,14 @@ var cmd = argv._[0];
 
 var standardKeys = {'IORegistryEntryLocation':true, 'IORegistryEntryName':true, 'USB Product Name':true,
 		'USB Serial Number':true, 'idProduct':true, 'idVendor':true, 
-		'id':true, 'serialPort':true, 'productId':true, 'deviceId':true, 'dfu':true };
+		'id':true, 'serialPort':true, 'productId':true, 'deviceId':true, 'dfu':true,
+		'dfuDevice':true};
 
 
 var usbDevices = [];
 
 //Default buffer is 200K, often the results will be 150K or so, so set a bigger buffer here to be safe
-execFile('ioreg', ['-p', 'IOUSB', '-l', '-a'], {maxBuffer:500000}, function(err, stdout, stderr) {
+child_process.execFile('ioreg', ['-p', 'IOUSB', '-l', '-a'], {maxBuffer:500000}, function(err, stdout, stderr) {
     if (err) throw err;
     
     // Results come back in XML, parse using xmldoc
@@ -48,28 +49,34 @@ execFile('ioreg', ['-p', 'IOUSB', '-l', '-a'], {maxBuffer:500000}, function(err,
     
     // Post-processing of the data here
 	for(var ii = 0; ii < usbDevices.length; ii++) {
-		var data = usbDevices[ii];
+		var device = usbDevices[ii];
 
 		// We use the number part of the cu serialPort path as a unique identifier for which device you 
 		// want to talk to. It's unique and relatively constant. The array index isn't a good id because
 		// it changes are devices go on and off USB. The deviceId is good, but we don't have it
 		// for devices not yet running 0.6.0. This seems like a reasonable compromise.
-		data.id = data.IORegistryEntryLocation.substring(0, data.IORegistryEntryLocation.length - 3).toUpperCase() + '1';
+		device.id = device.IORegistryEntryLocation.substring(0, device.IORegistryEntryLocation.length - 3).toUpperCase() + '1';
 		
 		// Create the cu serialPort path. Not positive this algorithm is correct, but it works for me.
 		// In older versions of Mac OS X , the hex number was not uppercased, if I recall correctly.
-		data.serialPort = '/dev/cu.usbmodem' + data.id;
+		device.serialPort = '/dev/cu.usbmodem' + device.id;
 		
 		// The product ID, for example 6 = Photon, 10 = Electron
-		data.productId = data.idProduct & 0xfff;
+		device.productId = device.idProduct & 0xfff;
 		
 		// dfu is set to true if the device is in DFU mode
-		data.dfu = (data.idProduct & 0xf000) == 0xd000;
+		device.dfu = (device.idProduct & 0xf000) == 0xd000;
+
+		// The dfuDevice is what you pass to dfu-util with the -d option. This is only the USB
+		// vendor and product ID, so it's only unique when there's only one Photon, for example, in
+		// DFU mode.
+		var dfuProduct = 0xd000 | (device.idProduct & 0xfff);
+		device.dfuDevice = device.idVendor.toString(16) + ':' + dfuProduct.toString(16);
 		
 		// Lowercase the device ID and put it in the easier to use field deviceId
 		// if there is one. There only is one if the device is running 0.6.0 or later.
-		if (data['USB Serial Number'].length == 24) {
-			data.deviceId = data['USB Serial Number'].toLowerCase(); 
+		if (device['USB Serial Number'].length == 24) {
+			device.deviceId = device['USB Serial Number'].toLowerCase(); 
 		}
 	}
 
@@ -165,16 +172,25 @@ execFile('ioreg', ['-p', 'IOUSB', '-l', '-a'], {maxBuffer:500000}, function(err,
 				}
 			}
 			
-			if (argv.dfu) {
-				execFile('stty', ['-f', device.serialPort, '14400'], function(err, stdout, stderr) {
-				    if (err) throw err;
-				});
+			if (argv.dfu) {			
+				if (argv.dfuUnique) {
+					// If the --dfuUnique flag is specified, put this device in DFU mode and put any other
+					// devices out of DFU mode
+			    	for(var ii = 0; ii < usbDevices.length; ii++) {
+			    		if (usbDevices[ii].id != device.id && usbDevices[ii].dfu) {
+			    			exitDfu(usbDevices[ii]);
+			    		}
+			    	}
+				}
+				
+				enterDfu(device);
 			}
 			if (argv.listening) {
-				execFile('stty', ['-f', device.serialPort, '28800'], function(err, stdout, stderr) {
-				    if (err) throw err;
-				});				
+				enterListening(device);
 			}
+			if (argv.exitListening) {
+				exitListening(device);
+			}			
 		}
 		else {
 			console.log("device not found");
@@ -186,8 +202,36 @@ execFile('ioreg', ['-p', 'IOUSB', '-l', '-a'], {maxBuffer:500000}, function(err,
     
 });	
 
-	
+function enterListening(device) {
+	child_process.execSync('stty -f ' + device.serialPort + ' 28800');
+}
 
+function exitListening(device) {
+	// When in listening mode, exit it by sending an x.
+	child_process.execSync('echo x > ' + device.serialPort);
+}
+
+function enterDfu(device) {
+	child_process.execSync('stty -f ' + device.serialPort + ' 14400');
+}
+
+function exitDfu(device) {
+	// This is a little silly but here it goes:
+	// The 'leave' option causes it to exit DFU mode. But you can only use it after uploading or downloading
+	// a file. So we download a little bit from the beginning of the flash, where the boot loader is, just so
+	// we can do something.
+	// The rm stuff is there because you can't -U to /dev/null because it won't allow you to write to a file
+	// that already exists.
+	/*
+	child_process.execSync('rm -f /tmp/devicehelper.bin');
+	
+	child_process.execSync('dfu-util -d ' + device.dfuDevice + ' -a 0 -s 0x08000000:16:leave -U /tmp/devicehelper.bin');
+	
+	child_process.execSync('rm -f /tmp/devicehelper.bin');
+	*/
+	child_process.execSync('rm -f /tmp/devicehelper$$.bin && dfu-util -d ' + device.dfuDevice + ' -a 0 -s 0x08000000:16:leave -U /tmp/devicehelper$$.bin && rm -f /tmp/devicehelper$$.bin');
+	
+}
 
 
 function plistToDict(elem) {
