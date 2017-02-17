@@ -29,15 +29,15 @@ var util = require('util');
 	deviceHelper.usbDevices = [];
 	
 	deviceHelper.scan = function() {
-
+		// Reset the list
+		deviceHelper.usbDevices = [];
+		
 		// Default buffer is 200K, often the results will be 150K or so, so set a bigger buffer here to be safe
 		var xmlString = child_process.execFileSync('ioreg', ['-p', 'IOUSB', '-l', '-a'], {maxBuffer:500000});
 		
 	    // Results come back in XML, parse using xmldoc
 	    var doc = new xmldoc.XmlDocument(xmlString);
-	    
-	    // console.log("stdout=" + doc.toString());
-	    
+	    	    
 	    // The XML is plist xml, so we need to parse it specially. Using a generic XML to Javascript
 	    // parser like xml2js createse pretty useless objects because of the way plist interleaves
 	    // keys and values.
@@ -123,10 +123,9 @@ var util = require('util');
 		// we can do something.
 		// The rm stuff is there because you can't -U to /dev/null because it won't allow you to write to a file
 		// that already exists.
-		child_process.execSync('rm -f /tmp/devicehelper$$.bin && dfu-util -d ' + device.dfuDevice + ' -a 0 -s 0x08000000:16:leave -U /tmp/devicehelper$$.bin && rm -f /tmp/devicehelper$$.bin');
-		
+		child_process.execSync('rm -f /tmp/devicehelper$$.bin && dfu-util -d ' + device.dfuDevice + ' -a 0 -s 0x08000000:16:leave -U /tmp/devicehelper$$.bin && rm -f /tmp/devicehelper$$.bin');		
 	};
-
+	
 	deviceHelper.addValueHook = function(key, value) {
 		// We only really care about IORegistryentryChildren, and we want to flatten out the
 		// list because we don't care which hub they're nested under, so we do that here.
@@ -151,14 +150,12 @@ var util = require('util');
 			if (elem.children[ii].name) {
 				if (key == null) {
 					key = elem.children[ii].val;
-					// console.log("ii=" + ii + " key=" + key);
 				} 
 				else {
 					// value
 					var value = deviceHelper.plistValue(elem.children[ii]); 
 					obj[key] = value;
 				
-					// console.log("obj key=" + key + " value=", value);
 					if (deviceHelper.addValueHook) {
 						deviceHelper.addValueHook(key, value);
 					}
@@ -179,8 +176,6 @@ var util = require('util');
 			if (elem.children[ii].name) {
 				var value = deviceHelper.plistValue(elem.children[ii]); 
 				array.push(value);
-				
-				// console.log("array ii=" + ii + " value=", value);
 			}
 		}
 		

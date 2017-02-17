@@ -1,5 +1,5 @@
 // Tool to help manage Photon and Electron devices connected to a Mac
-// This really only works on the Mac; it uses the xxx program that's only available on the Mac,
+// This really only works on the Mac; it uses the ioreg program that's only available on the Mac,
 // and the mapping between USB devices and serial ports is Mac-specific.
 
 // Before you begin:
@@ -15,7 +15,6 @@ var argv = require('yargs')
 	.argv;
 
 var cmd = argv._[0];
-// console.log("cmd=" + cmd);
 
 // The deviceHelper library does most of the actual work here
 var deviceHelper = require('./DeviceHelperLib.js');
@@ -33,6 +32,8 @@ if (cmd == 'list') {
 
     if (argv.json) {
         // Return data in JSON, suitable for programmatic processing
+    	// node devicehelper.js list --json
+    	// node devicehelper.js list --json --all
         console.log(JSON.stringify(deviceHelper.usbDevices));            	
     }
     else
@@ -53,12 +54,18 @@ if (cmd == 'list') {
     }
     else
     if (argv.ids) {
+    	// Return a list of ids, one per line:
+    	// node devicehelper.js list --ids    	
+    	// The id is a unique string that identifiers a port. It's the unique part of the 
+    	// /dev/cu.usbmodem string.
     	for(var ii = 0; ii < deviceHelper.usbDevices.length; ii++) {
     		console.log(deviceHelper.usbDevices[ii].id);
     	}
     }
     else
     if (argv.serialPorts) {
+    	// Return a list of serial port names, one per line:
+    	// node devicehelper.js list --serialPorts 	
     	for(var ii = 0; ii < deviceHelper.usbDevices.length; ii++) {
     		console.log(deviceHelper.usbDevices[ii].serialPort);
     	}
@@ -69,27 +76,31 @@ if (cmd == 'find') {
 	var device;
 	
 	if (argv.id) {
-    	for(var ii = 0; ii < usbDevices.length; ii++) {
-    		if (usbDevices[ii].id == argv.id) {
-    			device = usbDevices[ii];
+		// Find a device by its id (unique part of the /dev/cu.usbmodem string)
+		// node devicehelper.js find --id=FD1331 --enterListening 
+    	for(var ii = 0; ii < deviceHelper.usbDevices.length; ii++) {
+    		if (deviceHelper.usbDevices[ii].id == argv.id) {
+    			device = deviceHelper.usbDevices[ii];
     			break;
     		}
     	}			
 	}
 	else
 	if (argv.serialPort) {
-    	for(var ii = 0; ii < usbDevices.length; ii++) {
-    		if (usbDevices[ii].serialPort == argv.serialPort) {
-    			device = usbDevices[ii];
+		// node devicehelper.js find --serialPort="/dev/cu.usbmodemFD1331" --enterListening 
+    	for(var ii = 0; ii < deviceHelper.usbDevices.length; ii++) {
+    		if (deviceHelper.usbDevices[ii].serialPort == argv.serialPort) {
+    			device = deviceHelper.usbDevices[ii];
     			break;
     		}
     	}						
 	}
 	else
 	if (argv.deviceId) {
-    	for(var ii = 0; ii < usbDevices.length; ii++) {
-    		if (usbDevices[ii].deviceId == argv.deviceId) {
-    			device = usbDevices[ii];
+		// node devicehelper.js find --deviceId="" --enterListening 
+    	for(var ii = 0; ii < deviceHelper.usbDevices.length; ii++) {
+    		if (deviceHelper.usbDevices[ii].deviceId == argv.deviceId) {
+    			device = deviceHelper.usbDevices[ii];
     			break;
     		}
     	}									
@@ -110,28 +121,31 @@ if (cmd == 'find') {
 			if (argv.onlyOne) {
 				// If the --onlyOne flag is specified, put this device in DFU mode and put any other
 				// devices out of DFU mode
-		    	for(var ii = 0; ii < usbDevices.length; ii++) {
-		    		if (usbDevices[ii].id != device.id && usbDevices[ii].dfu) {
-		    			exitDfu(usbDevices[ii]);
+		    	for(var ii = 0; ii < deviceHelper.usbDevices.length; ii++) {
+		    		if (deviceHelper.usbDevices[ii].id != device.id && deviceHelper.usbDevices[ii].dfu) {
+		    			deviceHelper.exitDfu(deviceHelper.usbDevices[ii]);
 		    		}
 		    	}
 			}
 			
-			enterDfu(device);
+			deviceHelper.enterDfu(device);
 		}
+		
 		if (argv.exitDfu) {
-			exitDfu(device);
+			deviceHelper.exitDfu(device);
 		}
+		
 		if (argv.enterListening) {
-			enterListening(device);
+			deviceHelper.enterListening(device);
 		}
-		/* See note in implementation below for why this is commented out
-		if (argv.enterSafeListening) {
-			enterSafeListening(device);
-		}
-		*/
+		
+		// See note in implementation in the library for why this is commented out
+		// if (argv.enterSafeListening) {
+		//	enterSafeListening(device);
+		//}
+		
 		if (argv.exitListening) {
-			exitListening(device);
+			deviceHelper.exitListening(device);
 		}			
 	}
 	else {
