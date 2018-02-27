@@ -10,10 +10,6 @@ var util = require('util');
 
 
 /**
- * Module for interacting with the Particle cloud
- * 
- * The way this works is that login credentials are usually given by the command line
- * using the --login <user> <pass> command. 
  */
 (function(deviceHelper) {
 	
