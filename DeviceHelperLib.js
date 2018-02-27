@@ -47,7 +47,7 @@ var util = require('util');
 			// want to talk to. It's unique and relatively constant. The array index isn't a good id because
 			// it changes are devices go on and off USB. The deviceId is good, but we don't have it
 			// for devices not yet running 0.6.0. This seems like a reasonable compromise.
-			device.id = device.IORegistryEntryLocation.substring(0, device.IORegistryEntryLocation.length - 3).toUpperCase() + '1';
+			device.id = device.IORegistryEntryLocation.substring(0, device.IORegistryEntryLocation.length - 2).toUpperCase() + '1';
 			
 			// Create the cu serialPort path. Not positive this algorithm is correct, but it works for me.
 			// In older versions of Mac OS X , the hex number was not uppercased, if I recall correctly.
